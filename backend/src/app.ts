@@ -12,6 +12,9 @@ app.use(express.json());
 app.use(cookieParser());
 
 // Routes
+app.get('/', (req, res) => {
+  res.status(200).json({ message: 'API is running...' });
+});
 app.use('/auth', authRoutes);
 app.use('/trip', tripRoutes);
 

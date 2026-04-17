@@ -1,6 +1,17 @@
 import { GoogleGenAI } from '@google/genai';
 
-const ai = new GoogleGenAI({}); 
+const credentials = JSON.parse(
+  process.env.GOOGLE_SERVICE_ACCOUNT_KEY as string
+);
+
+const ai = new GoogleGenAI({
+  vertexai: true,
+  project: credentials.project_id,
+  location: 'us-central1',
+  googleAuthOptions: {
+    credentials,
+  },
+});
 
 export class LLMService {
   static async generateTravelPlanRaw(prompt: string): Promise<string> {

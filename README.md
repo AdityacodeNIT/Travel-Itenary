@@ -16,8 +16,8 @@ Beyond simple generation, the platform allows users to **interact** with their i
   *Justification:* Express provides a lightweight, unopinionated routing layer. TypeScript ensures strict type safety across the complex JSON schemas shared between the LLM and the database.
 - **Database:** MongoDB (Mongoose).
   *Justification:* MongoDB's document-oriented structure is ideal for storing highly nested, dynamic itinerary data (arrays of days, nested activities, dynamic keys) without the rigidity of a SQL schema.
-- **AI Agent:** Google Vertex AI (Gemini 2.0 Flash).
-  *Justification:* Gemini 2.0 Flash was selected for its extremely low latency and high reliability in generating structured JSON data via strict prompting.
+- **AI Agent:** Google Vertex AI (Gemini 2.5 Flash).
+  *Justification:*  Used the Gemini 2.5 Flash for its extremely low latency and high reliability in generating structured JSON data via strict prompting as well as it provides the low cost api calling .
 
 ## 3. High-Level Architecture
 

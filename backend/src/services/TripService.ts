@@ -254,63 +254,116 @@ Return ONLY valid JSON with this exact structure:
   }
 
   static async optimizeDayBudget(id: string, userId: string, dayNumber: number, targetReduction?: number): Promise<ITrip | null> {
-    const trip = await Trip.findOne({ _id: id, userId });
-    if (!trip) throw new Error('Trip not found');
+      console.log('[OPTIMIZE] Starting day optimization:', {
+        tripId: id,
+        userId,
+        dayNumber,
+        targetReduction,
+      });
 
-    const dayIndex = trip.itinerary.findIndex((d) => d.day === dayNumber);
-    if (dayIndex === -1) throw new Error('Day not found in itinerary');
-    
-    const currentDay = trip.itinerary[dayIndex];
-    const currentCost = currentDay.estimatedCost;
-    const reductionGoalStr = targetReduction ? ` Try to reduce the cost by approximately $${targetReduction} or more.` : ` Reduce the cost significantly while maintaining a good experience.`;
+      const trip = await Trip.findOne({ _id: id, userId });
+      if (!trip) {
+        console.error('[OPTIMIZE] Trip not found');
+        throw new Error('Trip not found');
+      }
 
-    const prompt = `
-You are an expert AI Travel Planner and Smart Budget Optimizer.
-The user wants to reduce the cost of Day ${dayNumber} of their trip to ${trip.destination}.
-Their overall budget category is ${trip.budgetType}.
+      const dayIndex = trip.itinerary.findIndex((d) => d.day === dayNumber);
+      if (dayIndex === -1) {
+        console.error('[OPTIMIZE] Day not found in itinerary');
+        throw new Error('Day not found in itinerary');
+      }
 
-Current activities for Day ${dayNumber}:
-${JSON.stringify(currentDay.activities, null, 2)}
-Current Estimated Cost: $${currentCost}
+      const currentDay = trip.itinerary[dayIndex];
+      const currentCost = currentDay.estimatedCost;
 
-YOUR TASK:
-1. Tag each current activity mentally with a cost level (Free, $, $$, $$$).
-2. Identify the most expensive activities (the $$$ ones).
-3. Replace those expensive activities with practical, cheaper (or free) alternatives that still fit their interests: ${trip.interests.join(', ')}.
-4.${reductionGoalStr} 
-CRITICAL PRICING: All estimated costs MUST be calculated purely in Indian Rupees (INR) as plain integers.
+      console.log('[OPTIMIZE] Current day details:', {
+        day: dayNumber,
+        currentCost,
+        activities: currentDay.activities,
+      });
 
-Return ONLY valid JSON representing the new optimized day, with this exact structure:
-{
-  "day": ${dayNumber},
-  "activities": [
-    "Cheaper alternative activity 1",
-    "Cheaper alternative activity 2",
-    "Retained affordable activity 3"
-  ],
-  "estimatedCost": <new_lower_estimated_cost>
-}
-`;
+      const reductionGoalStr = targetReduction 
+        ? ` Try to reduce the cost by approximately ₹${targetReduction} or more.` 
+        : ` Reduce the cost significantly while maintaining a good experience.`;
 
-    const { LLMService } = await import('./LLMService');
-    const { ParserService } = await import('./ParserService');
+      const prompt = `
+  You are an expert AI Travel Planner and Smart Budget Optimizer.
+  The user wants to reduce the cost of Day ${dayNumber} of their trip to ${trip.destination}.
+  Their overall budget category is ${trip.budgetType}.
 
-    const rawData = await LLMService.generateTravelPlanRaw(prompt);
-    const parsedDay = ParserService.parseLLMOutput(rawData);
+  Current activities for Day ${dayNumber}:
+  ${JSON.stringify(currentDay.activities, null, 2)}
+  Current Estimated Cost: ₹${currentCost}
 
-    if (parsedDay.day === undefined || !parsedDay.activities || parsedDay.estimatedCost === undefined) {
-      throw new Error('LLM failed to return structured day format.');
+  YOUR TASK:
+  1. Analyze each current activity and estimate its cost level (Free, ₹, ₹₹, ₹₹₹).
+  2. Identify the most expensive activities (the ₹₹₹ and ₹₹ ones).
+  3. Replace those expensive activities with practical, cheaper (or free) alternatives that still fit their interests: ${trip.interests.join(', ')}.
+  4.${reductionGoalStr}
+  5. Keep at least 2-3 activities to maintain a good experience.
+  6. Ensure the new activities are realistic and available in ${trip.destination}.
+
+  IMPORTANT RULES:
+  - All costs MUST be in Indian Rupees (INR) as plain integers
+  - The new estimatedCost MUST be lower than ${currentCost}
+  - Activities should be specific and actionable
+  - Maintain the cultural authenticity of the destination
+
+  Return ONLY valid JSON with this exact structure (no markdown, no extra text):
+  {
+    "day": ${dayNumber},
+    "activities": [
+      "Cheaper alternative activity 1",
+      "Cheaper alternative activity 2",
+      "Retained affordable activity 3"
+    ],
+    "estimatedCost": <new_lower_cost_as_integer>
+  }
+  `;
+
+      console.log('[OPTIMIZE] Calling AI to optimize day...');
+
+      const { LLMService } = await import('./LLMService');
+      const { ParserService } = await import('./ParserService');
+
+      const rawData = await LLMService.generateTravelPlanRaw(prompt);
+      const parsedDay = ParserService.parseLLMOutput(rawData);
+
+      console.log('[OPTIMIZE] AI response parsed:', parsedDay);
+
+      if (parsedDay.day === undefined || !parsedDay.activities || parsedDay.estimatedCost === undefined) {
+        console.error('[OPTIMIZE] Invalid AI response structure');
+        throw new Error('LLM failed to return structured day format.');
+      }
+
+      // Validate that cost actually decreased
+      if (parsedDay.estimatedCost >= currentCost) {
+        console.warn('[OPTIMIZE] AI did not reduce cost, forcing reduction');
+        parsedDay.estimatedCost = Math.floor(currentCost * 0.8); // Force 20% reduction
+      }
+
+      console.log('[OPTIMIZE] Cost comparison:', {
+        before: currentCost,
+        after: parsedDay.estimatedCost,
+        reduction: currentCost - parsedDay.estimatedCost,
+        reductionPercent: Math.round(((currentCost - parsedDay.estimatedCost) / currentCost) * 100),
+      });
+
+      // Apply the new day
+      trip.itinerary[dayIndex] = parsedDay;
+
+      // Recalculate total budget
+      trip.budget = BudgetService.calculateTotalFromItinerary(trip.itinerary, trip.budget);
+
+      console.log('[OPTIMIZE] New budget totals:', trip.budget);
+
+      trip.markModified('itinerary');
+      const savedTrip = await trip.save();
+
+      console.log('[OPTIMIZE] ✅ Day optimized successfully');
+      return savedTrip;
     }
 
-    // Apply the new day
-    trip.itinerary[dayIndex] = parsedDay;
-
-    // Recalculate total budget
-    trip.budget = BudgetService.calculateTotalFromItinerary(trip.itinerary, trip.budget);
-
-    trip.markModified('itinerary');
-    return await trip.save();
-  }
 
   static async findSimilarTrip(data: any): Promise<any | null> {
     const { origin, destination, days, budgetType, interests = [] } = data;

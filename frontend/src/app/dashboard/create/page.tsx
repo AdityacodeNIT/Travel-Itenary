@@ -74,9 +74,10 @@ export default function CreateTripPage() {
         interests: interestsArray
       });
       router.push(`/dashboard/trip/${data._id}`);
-    } catch (err) {
-      console.error(err);
-      alert('Failed to generate trip. Please try again.');
+    } catch (err: any) {
+      console.error('Generation Error:', err);
+      const serverMsg = err.response?.data?.details || err.response?.data?.message || err.response?.data?.error || err.message;
+      alert(`Failed to generate trip: ${serverMsg}\n\n(This means Vercel or your local server encountered an issue. See console for full log)`);
       setLoading(false);
     }
   };

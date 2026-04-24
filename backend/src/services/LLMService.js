@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
 
-let aiInstance: GoogleGenAI | null = null;
+let aiInstance = null;
 
 function getAI() {
   if (!aiInstance) {
@@ -8,11 +8,11 @@ function getAI() {
     if (!keyString) {
       throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY is missing from environment variables.');
     }
-    
+
     let credentials;
     try {
       credentials = JSON.parse(keyString);
-    } catch (e) {
+    } catch (error) {
       throw new Error('Failed to parse GOOGLE_SERVICE_ACCOUNT_KEY as JSON. Make sure it is valid JSON string.');
     }
 
@@ -25,11 +25,12 @@ function getAI() {
       },
     });
   }
+
   return aiInstance;
 }
 
 export class LLMService {
-  static async generateTravelPlanRaw(prompt: string): Promise<string> {
+  static async generateTravelPlanRaw(prompt) {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
@@ -44,7 +45,7 @@ export class LLMService {
       return response.text;
     } catch (error) {
       console.error('LLM Generation Error:', error);
-      throw new Error('Failed to generate from Vertex AI: ' + ((error as Error).message || String(error)));
+      throw new Error('Failed to generate from Vertex AI: ' + (error.message || String(error)));
     }
   }
 }

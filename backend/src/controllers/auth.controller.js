@@ -1,10 +1,9 @@
-import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import User from '../models/User';
+import User from '../models/User.js';
 
-const generateToken = (res: Response, userId: string) => {
-  const token = jwt.sign({ id: userId }, process.env.JWT_SECRET as string, {
+const generateToken = (res, userId) => {
+  const token = jwt.sign({ id: userId }, process.env.JWT_SECRET, {
     expiresIn: '30d',
   });
 
@@ -17,10 +16,9 @@ const generateToken = (res: Response, userId: string) => {
   });
 };
 
-
-export const register = async (req: Request, res: Response): Promise<void> => {
+export const register = async (req, res) => {
   const { email, password } = req.body;
-  
+
   try {
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -28,33 +26,29 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
     const user = await User.create({ email, passwordHash });
-    
+
     if (user) {
       generateToken(res, user._id.toString());
       res.status(201).json({ _id: user._id, email: user.email });
-    }
-
-     else {
+    } else {
       res.status(400).json({ message: 'Invalid user data' });
     }
-    
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };
 
-export const login = async (req: Request, res: Response): Promise<void> => {
+export const login = async (req, res) => {
   const { email, password } = req.body;
-  
+
   try {
     const user = await User.findOne({ email });
-    
+
     if (user && (await bcrypt.compare(password, user.passwordHash))) {
       generateToken(res, user._id.toString());
       res.json({ _id: user._id, email: user.email });

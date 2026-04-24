@@ -1,5 +1,5 @@
 import express from 'express';
-import { protect } from '../middlewares/authMiddleware';
+import { protect } from '../middlewares/authMiddleware.js';
 import {
   generateTrip,
   getUserTrips,
@@ -8,7 +8,7 @@ import {
   deleteTrip,
   regenerateDay,
   optimizeDay,
-} from '../controllers/trip.controller';
+} from '../controllers/trip.controller.js';
 
 const router = express.Router();
 

@@ -1,32 +1,25 @@
-import Trip, { ITrip } from '../models/Trip';
-import { ValidationService } from './ValidationService';
-import { BudgetService } from './BudgetService';
+import Trip from '../models/Trip.js';
+import { ValidationService } from './ValidationService.js';
+import { BudgetService } from './BudgetService.js';
 
-function normalizeTripDoc(trip: any): any {
+function normalizeTripDoc(trip) {
   if (!trip) return trip;
   if (trip.budget) {
-    const b = trip.budget;
-    if (b.flights !== undefined && b.transport === undefined) {
-      b.transport = b.flights;
-      delete b.flights;
+    const budget = trip.budget;
+    if (budget.flights !== undefined && budget.transport === undefined) {
+      budget.transport = budget.flights;
+      delete budget.flights;
     }
-    if (b.transport === undefined) b.transport = 0;
+    if (budget.transport === undefined) budget.transport = 0;
   }
   if (!trip.transportMode) trip.transportMode = 'Flight';
-  if (!trip.origin)        trip.origin = '';
-  if (!trip.howToReach)    trip.howToReach = { summary: '', steps: [], arrivalTip: '' };
+  if (!trip.origin) trip.origin = '';
+  if (!trip.howToReach) trip.howToReach = { summary: '', steps: [], arrivalTip: '' };
   return trip;
 }
 
 export class TripService {
-  static getBasePrompt(
-    origin: string,
-    destination: string,
-    days: number,
-    budgetType: string,
-    interests: string[],
-    transportPreference: string
-  ): string {
+  static getBasePrompt(origin, destination, days, budgetType, interests, transportPreference) {
     const transportInstruction =
       transportPreference === 'AI Decide'
         ? `Determine the BEST transport mode from ${origin} to ${destination}. Consider distance, practicality, and cost. If a train or bus is a realistic and more affordable option, prefer that over flying. Choose ONE of: Flight, Train, Bus.`
@@ -62,7 +55,7 @@ Return ONLY valid JSON with this exact structure (no markdown, no extra text):
     "summary": "Fly from Mumbai to Paris with a layover in Dubai (~10 hrs total)",
     "steps": [
       "Book a flight from Mumbai (BOM) to Paris Charles de Gaulle (CDG)",
-      "Take the RER B train from CDG airport to central Paris (~45 mins, ~€12)",
+      "Take the RER B train from CDG airport to central Paris (~45 mins, ~â‚¬12)",
       "From Gare du Nord, take Metro Line 4 to your hotel area"
     ],
     "arrivalTip": "Book your train/bus tickets to the city center in advance. Paris Metro day passes save money."
@@ -92,19 +85,16 @@ Return ONLY valid JSON with this exact structure (no markdown, no extra text):
 `;
   }
 
-  static async generateTrip(userId: string, data: any): Promise<ITrip> {
+  static async generateTrip(userId, data) {
     const {
       origin,
       destination,
       days,
       budgetType,
       interests,
-      transportPreference = 'AI Decide'
+      transportPreference = 'AI Decide',
     } = data;
 
-  
-
-    // STEP 1: Try to find similar trip
     const cachedTrip = await this.findSimilarTrip(data);
 
     if (cachedTrip) {
@@ -125,28 +115,15 @@ Return ONLY valid JSON with this exact structure (no markdown, no extra text):
         hotels: JSON.parse(JSON.stringify(normalizedTrip.hotels)),
       });
 
-      // Fix transport + route if origin changed
       if (normalizedTrip.origin !== origin) {
-  
-        
-        const newTransportCost = BudgetService.estimateTransport(
-          origin,
-          destination,
-          transportPreference
-        );
+        const newTransportCost = BudgetService.estimateTransport(origin, destination, transportPreference);
 
         clonedTrip.budget.transport = newTransportCost;
-
-        clonedTrip.budget = BudgetService.calculateTotalFromItinerary(
-          clonedTrip.itinerary,
-          clonedTrip.budget
-        );
-
-        // update route info
+        clonedTrip.budget = BudgetService.calculateTotalFromItinerary(clonedTrip.itinerary, clonedTrip.budget);
         clonedTrip.howToReach = {
           summary: `Travel from ${origin} to ${destination}`,
           steps: [],
-          arrivalTip: ''
+          arrivalTip: '',
         };
       }
 
@@ -154,9 +131,6 @@ Return ONLY valid JSON with this exact structure (no markdown, no extra text):
       return savedTrip;
     }
 
-    // STEP 2: Generate using LLM
- 
-    
     const prompt = this.getBasePrompt(
       origin,
       destination,
@@ -173,7 +147,6 @@ Return ONLY valid JSON with this exact structure (no markdown, no extra text):
       validatedData.budget
     );
 
-
     const newTrip = new Trip({
       userId,
       origin,
@@ -186,7 +159,7 @@ Return ONLY valid JSON with this exact structure (no markdown, no extra text):
       howToReach: validatedData.howToReach || {
         summary: '',
         steps: [],
-        arrivalTip: ''
+        arrivalTip: '',
       },
       itinerary: validatedData.days,
       budget: finalBudget,
@@ -197,21 +170,21 @@ Return ONLY valid JSON with this exact structure (no markdown, no extra text):
     return savedTrip;
   }
 
-  static async getTripByIdAndUser(id: string, userId: string): Promise<any | null> {
+  static async getTripByIdAndUser(id, userId) {
     const trip = await Trip.findOne({ _id: id, userId }).lean();
     return normalizeTripDoc(trip);
   }
 
-  static async getUserTrips(userId: string): Promise<any[]> {
+  static async getUserTrips(userId) {
     const trips = await Trip.find({ userId }).sort({ createdAt: -1 }).lean();
     return trips.map(normalizeTripDoc);
   }
 
-  static async deleteTrip(id: string, userId: string): Promise<void> {
+  static async deleteTrip(id, userId) {
     await Trip.findOneAndDelete({ _id: id, userId });
   }
 
-  static async regenerateDay(id: string, userId: string, dayNumber: number): Promise<ITrip | null> {
+  static async regenerateDay(id, userId, dayNumber) {
     const trip = await Trip.findOne({ _id: id, userId });
     if (!trip) throw new Error('Trip not found');
 
@@ -230,8 +203,8 @@ Return ONLY valid JSON with this exact structure:
 }
 `;
 
-    const { LLMService } = await import('./LLMService');
-    const { ParserService } = await import('./ParserService');
+    const { LLMService } = await import('./LLMService.js');
+    const { ParserService } = await import('./ParserService.js');
 
     const rawData = await LLMService.generateTravelPlanRaw(prompt);
     const parsedDay = ParserService.parseLLMOutput(rawData);
@@ -240,7 +213,7 @@ Return ONLY valid JSON with this exact structure:
       throw new Error('LLM failed to return structured day format.');
     }
 
-    const dayIndex = trip.itinerary.findIndex(d => d.day === dayNumber);
+    const dayIndex = trip.itinerary.findIndex((day) => day.day === dayNumber);
     if (dayIndex !== -1) {
       trip.itinerary[dayIndex] = parsedDay;
     } else {
@@ -253,69 +226,64 @@ Return ONLY valid JSON with this exact structure:
     return await trip.save();
   }
 
-  static async optimizeDayBudget(id: string, userId: string, dayNumber: number, targetReduction?: number): Promise<ITrip | null> {
-      console.log('[OPTIMIZE] Starting HYBRID day optimization:', {
-        tripId: id,
-        userId,
-        dayNumber,
-        targetReduction,
-      });
+  static async optimizeDayBudget(id, userId, dayNumber, targetReduction) {
+    console.log('[OPTIMIZE] Starting HYBRID day optimization:', {
+      tripId: id,
+      userId,
+      dayNumber,
+      targetReduction,
+    });
 
-      const trip = await Trip.findOne({ _id: id, userId });
-      if (!trip) {
-        console.error('[OPTIMIZE] Trip not found');
-        throw new Error('Trip not found');
-      }
+    const trip = await Trip.findOne({ _id: id, userId });
+    if (!trip) {
+      console.error('[OPTIMIZE] Trip not found');
+      throw new Error('Trip not found');
+    }
 
-      const dayIndex = trip.itinerary.findIndex((d) => d.day === dayNumber);
-      if (dayIndex === -1) {
-        console.error('[OPTIMIZE] Day not found in itinerary');
-        throw new Error('Day not found in itinerary');
-      }
+    const dayIndex = trip.itinerary.findIndex((day) => day.day === dayNumber);
+    if (dayIndex === -1) {
+      console.error('[OPTIMIZE] Day not found in itinerary');
+      throw new Error('Day not found in itinerary');
+    }
 
-      const currentDay = trip.itinerary[dayIndex];
-      const currentCost = currentDay.estimatedCost;
+    const currentDay = trip.itinerary[dayIndex];
+    const currentCost = currentDay.estimatedCost;
 
-      if (currentCost === 0) {
-        console.log('[OPTIMIZE] Day cost is already 0, nothing to optimize');
-        return trip;
-      }
+    if (currentCost === 0) {
+      console.log('[OPTIMIZE] Day cost is already 0, nothing to optimize');
+      return trip;
+    }
 
-      console.log('[OPTIMIZE] Current day details:', {
-        day: dayNumber,
-        currentCost,
-        activities: currentDay.activities,
-      });
+    console.log('[OPTIMIZE] Current day details:', {
+      day: dayNumber,
+      currentCost,
+      activities: currentDay.activities,
+    });
 
-      // STEP 1: Calculate new cost using pure math (guaranteed reduction)
-      let newCost: number;
-      let reductionPercent: number;
+    let newCost;
+    let reductionPercent;
 
-      if (targetReduction && targetReduction > 0) {
-        // User specified a target reduction amount
-        newCost = Math.max(0, currentCost - targetReduction);
-        reductionPercent = Math.round((targetReduction / currentCost) * 100);
-      } else {
-        // Default: reduce by 20%
-        reductionPercent = 20;
-        newCost = Math.floor(currentCost * (1 - reductionPercent / 100));
-      }
+    if (targetReduction && targetReduction > 0) {
+      newCost = Math.max(0, currentCost - targetReduction);
+      reductionPercent = Math.round((targetReduction / currentCost) * 100);
+    } else {
+      reductionPercent = 20;
+      newCost = Math.floor(currentCost * (1 - reductionPercent / 100));
+    }
 
-      // Ensure we actually reduced the cost
-      if (newCost >= currentCost) {
-        newCost = Math.floor(currentCost * 0.8); // Force 20% reduction
-        reductionPercent = 20;
-      }
+    if (newCost >= currentCost) {
+      newCost = Math.floor(currentCost * 0.8);
+      reductionPercent = 20;
+    }
 
-      console.log('[OPTIMIZE] Math-based cost calculation:', {
-        before: currentCost,
-        after: newCost,
-        reduction: currentCost - newCost,
-        reductionPercent,
-      });
+    console.log('[OPTIMIZE] Math-based cost calculation:', {
+      before: currentCost,
+      after: newCost,
+      reduction: currentCost - newCost,
+      reductionPercent,
+    });
 
-      // STEP 2: Ask AI to suggest cheaper activities that fit the new budget
-      const prompt = `
+    const prompt = `
   You are an expert AI Travel Planner and Budget Optimizer.
 
   The user wants to reduce the cost of Day ${dayNumber} of their trip to ${trip.destination}.
@@ -325,14 +293,14 @@ Return ONLY valid JSON with this exact structure:
   CURRENT SITUATION:
   Current activities for Day ${dayNumber}:
   ${JSON.stringify(currentDay.activities, null, 2)}
-  Current cost: ₹${currentCost}
+  Current cost: â‚¹${currentCost}
 
   NEW BUDGET CONSTRAINT:
-  The new budget for this day is EXACTLY ₹${newCost} (reduced by ${reductionPercent}%)
+  The new budget for this day is EXACTLY â‚¹${newCost} (reduced by ${reductionPercent}%)
 
   YOUR TASK:
   Suggest 3-5 alternative activities that:
-  1. Fit within the NEW budget of ₹${newCost}
+  1. Fit within the NEW budget of â‚¹${newCost}
   2. Are cheaper alternatives to the current expensive activities
   3. Match the user's interests: ${trip.interests.join(', ')}
   4. Are realistic and available in ${trip.destination}
@@ -343,7 +311,7 @@ Return ONLY valid JSON with this exact structure:
   - Replace expensive attractions with free alternatives (parks, walking tours, free museums)
   - Replace expensive dining with local/street food options
   - Keep the activities culturally authentic to ${trip.destination}
-  - The total should fit within ₹${newCost}
+  - The total should fit within â‚¹${newCost}
 
   Return ONLY valid JSON with this exact structure (no markdown, no extra text):
   {
@@ -359,84 +327,72 @@ Return ONLY valid JSON with this exact structure:
   CRITICAL: The estimatedCost MUST be exactly ${newCost}. Do not change it.
   `;
 
-      console.log('[OPTIMIZE] Asking AI for cheaper activity suggestions...');
+    console.log('[OPTIMIZE] Asking AI for cheaper activity suggestions...');
 
-      try {
-        const { LLMService } = await import('./LLMService');
-        const { ParserService } = await import('./ParserService');
+    try {
+      const { LLMService } = await import('./LLMService.js');
+      const { ParserService } = await import('./ParserService.js');
 
-        const rawData = await LLMService.generateTravelPlanRaw(prompt);
-        const parsedDay = ParserService.parseLLMOutput(rawData);
+      const rawData = await LLMService.generateTravelPlanRaw(prompt);
+      const parsedDay = ParserService.parseLLMOutput(rawData);
 
-        console.log('[OPTIMIZE] AI response parsed:', parsedDay);
+      console.log('[OPTIMIZE] AI response parsed:', parsedDay);
 
-        // Validate AI response structure
-        if (parsedDay.day === undefined || !parsedDay.activities || !Array.isArray(parsedDay.activities)) {
-          throw new Error('Invalid AI response structure');
-        }
-
-        // FORCE the cost to be our calculated value (don't trust AI for math)
-        parsedDay.estimatedCost = newCost;
-
-        console.log('[OPTIMIZE] Using AI-suggested activities with math-based cost:', {
-          activities: parsedDay.activities,
-          cost: newCost,
-        });
-
-        // Update the day with AI activities and math-based cost
-        trip.itinerary[dayIndex] = {
-          day: dayNumber,
-          activities: parsedDay.activities,
-          estimatedCost: newCost,
-        };
-
-      } catch (error) {
-        console.error('[OPTIMIZE] AI failed, using fallback:', error);
-
-        // Fallback: Keep original activities but add optimization note
-        const optimizedActivities = [...currentDay.activities];
-        if (optimizedActivities.length > 0) {
-          const firstActivity = optimizedActivities[0];
-          if (!firstActivity.includes('(Budget optimized)')) {
-            optimizedActivities[0] = `${firstActivity} (Budget optimized -${reductionPercent}%)`;
-          }
-        }
-
-        trip.itinerary[dayIndex] = {
-          day: dayNumber,
-          activities: optimizedActivities,
-          estimatedCost: newCost,
-        };
+      if (parsedDay.day === undefined || !parsedDay.activities || !Array.isArray(parsedDay.activities)) {
+        throw new Error('Invalid AI response structure');
       }
 
-      // Recalculate total budget
-      trip.budget = BudgetService.calculateTotalFromItinerary(trip.itinerary, trip.budget);
+      parsedDay.estimatedCost = newCost;
 
-      console.log('[OPTIMIZE] Final result:', {
-        day: dayNumber,
-        oldCost: currentCost,
-        newCost: newCost,
-        reduction: currentCost - newCost,
-        reductionPercent,
-        newBudgetTotal: trip.budget.total,
+      console.log('[OPTIMIZE] Using AI-suggested activities with math-based cost:', {
+        activities: parsedDay.activities,
+        cost: newCost,
       });
 
-      trip.markModified('itinerary');
-      const savedTrip = await trip.save();
+      trip.itinerary[dayIndex] = {
+        day: dayNumber,
+        activities: parsedDay.activities,
+        estimatedCost: newCost,
+      };
+    } catch (error) {
+      console.error('[OPTIMIZE] AI failed, using fallback:', error);
 
-      console.log('[OPTIMIZE] ✅ Day optimized successfully (hybrid: math + AI suggestions)');
-      return savedTrip;
+      const optimizedActivities = [...currentDay.activities];
+      if (optimizedActivities.length > 0) {
+        const firstActivity = optimizedActivities[0];
+        if (!firstActivity.includes('(Budget optimized)')) {
+          optimizedActivities[0] = `${firstActivity} (Budget optimized -${reductionPercent}%)`;
+        }
+      }
+
+      trip.itinerary[dayIndex] = {
+        day: dayNumber,
+        activities: optimizedActivities,
+        estimatedCost: newCost,
+      };
     }
 
+    trip.budget = BudgetService.calculateTotalFromItinerary(trip.itinerary, trip.budget);
 
+    console.log('[OPTIMIZE] Final result:', {
+      day: dayNumber,
+      oldCost: currentCost,
+      newCost,
+      reduction: currentCost - newCost,
+      reductionPercent,
+      newBudgetTotal: trip.budget.total,
+    });
 
+    trip.markModified('itinerary');
+    const savedTrip = await trip.save();
 
-  static async findSimilarTrip(data: any): Promise<any | null> {
+    console.log('[OPTIMIZE] âœ… Day optimized successfully (hybrid: math + AI suggestions)');
+    return savedTrip;
+  }
+
+  static async findSimilarTrip(data) {
     const { origin, destination, days, budgetType, interests = [] } = data;
 
-
-
-    // 1. Try strict match (including origin)
     let trips = await Trip.find({
       origin: { $regex: new RegExp(`^${origin}`, 'i') },
       destination: { $regex: new RegExp(`^${destination}`, 'i') },
@@ -444,46 +400,32 @@ Return ONLY valid JSON with this exact structure:
       budgetType,
     }).lean();
 
-   
-
-    // 2. If nothing found → fallback (ignore origin)
     if (!trips.length) {
       trips = await Trip.find({
         destination: { $regex: new RegExp(`^${destination}`, 'i') },
         days,
         budgetType,
       }).lean();
-      
-  
     }
 
     if (!trips.length) {
-    
       return null;
     }
 
-    // Normalize interests for case-insensitive comparison
-    const normalizedInterests = interests.map((i: string) => i.toLowerCase().trim());
+    const normalizedInterests = interests.map((interest) => interest.toLowerCase().trim());
 
-    // scoring with interests
     let bestMatch = null;
     let bestScore = -1;
 
     for (const trip of trips) {
-      // Normalize trip interests
-      const tripInterests = (trip.interests || []).map((i: string) => i.toLowerCase().trim());
-      
-      // Calculate overlap
-      const overlap = tripInterests.filter((i: string) =>
-        normalizedInterests.includes(i)
-      ).length;
+      const tripInterests = (trip.interests || []).map((interest) => interest.toLowerCase().trim());
 
-      // Calculate score (handle empty interests array)
+      const overlap = tripInterests.filter((interest) => normalizedInterests.includes(interest)).length;
+
       let score = 0;
       if (normalizedInterests.length > 0) {
         score = overlap / normalizedInterests.length;
       } else {
-        // If no interests provided, any trip is a perfect match
         score = 1.0;
       }
 
@@ -493,14 +435,12 @@ Return ONLY valid JSON with this exact structure:
       }
     }
 
-    // Lower threshold to 30% for better cache hit rate
     const threshold = 0.3;
-    
+
     if (bestMatch && bestScore >= threshold) {
-  
       return bestMatch;
-    } else {
-      return null;
     }
+
+    return null;
   }
 }

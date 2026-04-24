@@ -1,32 +1,27 @@
-import { IBudget, IDay } from '../models/Trip';
-
 export class BudgetService {
-  static estimateTransport(origin: string, destination: string, transportPreference: string): number {
-    // Simple estimation based on transport mode
-    // In production, you'd use distance APIs or real pricing data
-    const baseDistanceCost = 200; // baseline for medium distance
-    
+  static estimateTransport(origin, destination, transportPreference) {
+    const baseDistanceCost = 200;
+
     switch (transportPreference) {
       case 'Flight':
-        return baseDistanceCost * 2; // flights are typically more expensive
+        return baseDistanceCost * 2;
       case 'Train':
         return baseDistanceCost * 1.2;
       case 'Bus':
         return baseDistanceCost * 0.8;
       case 'AI Decide':
       default:
-        return baseDistanceCost * 1.5; // average estimate
+        return baseDistanceCost * 1.5;
     }
   }
 
-  static calculateTotalFromItinerary(itinerary: IDay[], budgetInput: IBudget): IBudget {
+  static calculateTotalFromItinerary(itinerary, budgetInput) {
     let activitiesCost = 0;
 
     itinerary.forEach((day) => {
       activitiesCost += day.estimatedCost;
     });
 
-    // Recalculate total as sum of all parts for consistency
     const total = activitiesCost + budgetInput.transport + budgetInput.accommodation + budgetInput.food;
 
     return {
